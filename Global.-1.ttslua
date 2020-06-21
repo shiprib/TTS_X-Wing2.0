@@ -3817,6 +3817,8 @@ TokenModule.tokenSources = {}
 
 TokenModule.tokenAssignments = {}
 
+TokenModule.mergedTokens = {}
+
 -- Update token and template sources on each load
 TokenModule.onLoad = function()
     for k, obj in pairs(getAllObjects()) do
@@ -3848,7 +3850,9 @@ end
 EventSub.Register('onLoad', TokenModule.onLoad)
 
 TokenModule.onObjectDestroyed = function(destroyed_object)
-    if TokenModule.tokenAssignments[destroyed_object.getGUID()] ~= nil then
+    if TokenModule.mergedTokens[destroyed_object.getGUID()] ~= nil then
+        TokenModule.mergedTokens[destroyed_object.getGUID()] = nil
+    elseif TokenModule.tokenAssignments[destroyed_object.getGUID()] ~= nil then
         TokenModule.tokenAssignments[destroyed_object.getGUID()].call("RemoveToken",{token=destroyed_object})
         TokenModule.tokenAssignments[destroyed_object.getGUID()] = nil
     end
@@ -3875,8 +3879,31 @@ TokenModule.onObjectDropped = function(player_color, object)
         end
     end
 end
-
 EventSub.Register('onObjectDropped', TokenModule.onObjectDropped)
+
+TokenModule.onObjectEnterContainer = function(container, enter_object)
+    local token_GUID = enter_object.getGUID()
+    local assigned_ship = TokenModule.tokenAssignments[token_GUID]
+    if assigned_ship ~= nil then
+        assigned_ship.call("RemoveToken",{token=enter_object})
+        assigned_ship.call("AddToken",{token=container})
+
+        TokenModule.tokenAssignments[token_GUID] = nil
+        TokenModule.tokenAssignments[container.getGUID()] = assigned_ship
+
+        TokenModule.mergedTokens[container.getGUID()] = true
+    end
+end
+EventSub.Register('onObjectEnterContainer', TokenModule.onObjectEnterContainer)
+
+TokenModule.onObjectLeaveContainer = function(container, leave_object)
+    local container_GUID = container.getGUID()
+    if TokenModule.tokenAssignments[container_GUID] ~= nil then
+        -- These are the same?! No idea how to get the one that's left.
+        printToAll(string.format('token %s is being removed from container %s.', leave_object.getGUID(), container.getGUID()))
+    end
+end
+EventSub.Register('onObjectLeaveContainer', TokenModule.onObjectLeaveContainer)
 
 
 -- How far can tokens be to be considered owned bya  ship
